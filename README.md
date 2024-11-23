@@ -184,6 +184,11 @@ protobuf {
       // or
       // path = 'tools/protoc-gen-grpc-java'
     }
+    dubbo {
+      artifact = "org.apache.dubbo:dubbo-compiler:${dubboVersion}"
+      // optional (jar main-class)
+      // mainClass = "org.apache.dubbo.gen.grpc.reactive.ReactorDubboGrpcGenerator"
+    }
     // Any other plugins
     ...
   }

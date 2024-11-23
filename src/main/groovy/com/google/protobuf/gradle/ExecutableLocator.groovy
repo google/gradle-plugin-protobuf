@@ -46,6 +46,7 @@ class ExecutableLocator implements Named {
 
   private String artifact
   private String path
+  private String mainClass
 
   private FileCollection artifactFiles
   private String simplifiedArtifactName
@@ -82,6 +83,14 @@ class ExecutableLocator implements Named {
 
   String getPath() {
     return path
+  }
+
+  String getMainClass() {
+    return mainClass
+  }
+
+  void setMainClass(String mainClass) {
+    this.mainClass = mainClass
   }
 
   @PackageScope
