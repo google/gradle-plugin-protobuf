@@ -160,6 +160,12 @@ public abstract class GenerateProtoTask extends DefaultTask {
      */
     @Input
     boolean includeImports
+
+    /**
+     * If true, protobuf files will use edition to declare their syntax.
+     */
+    @Input
+    boolean experimentalEditions
   }
 
   @Internal("Handled as input via getDescriptorSetOptionsForCaching()")
@@ -644,6 +650,9 @@ public abstract class GenerateProtoTask extends DefaultTask {
       }
       if (descriptorSetOptions.includeSourceInfo) {
         baseCmd += "--include_source_info"
+      }
+      if (descriptorSetOptions.experimentalEditions) {
+        baseCmd += "--experimental_editions"
       }
     }
 
