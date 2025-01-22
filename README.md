@@ -489,6 +489,15 @@ Settings -> Build, Execution, Deployment
 This plugin integrates with the ``idea`` plugin and automatically
 registers the proto files and generated Java code as sources.
 
+Generated files whose size exceeds IntelliJ's default file size
+limits will not get parsed. Generated symbols may still appear to
+be not found or not referenced. To increase IntelliJ's max file
+size, visit the **Help | Edit Custom Properties...** menu, then
+add the following lines:
+
+```
+idea.max.intellisense.filesize=99999
+```
 
 ## Testing the plugin
 
