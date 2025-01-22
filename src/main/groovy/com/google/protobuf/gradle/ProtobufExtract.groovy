@@ -35,11 +35,9 @@ import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.file.FileCollection
-import org.gradle.api.file.FileSystemLocation
 import org.gradle.api.file.FileTree
 import org.gradle.api.logging.Logger
 import org.gradle.api.model.ObjectFactory
-import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
@@ -72,6 +70,13 @@ abstract class ProtobufExtract extends DefaultTask {
   public abstract ConfigurableFileCollection getInputFiles()
 
   /**
+   * A dummy task dependency to delay provider calculation for input proto files to execution time
+   * even with configuration cache enabled.
+   */
+  @Internal
+  abstract ConfigurableFileCollection getDummyTaskDependency()
+
+  /**
    * Inputs for this task containing only proto files, which is enough for up-to-date checks.
    * Add inputs to inputFiles. Uses relative path sensitivity as directory layout changes impact output.
    */
@@ -96,9 +101,6 @@ abstract class ProtobufExtract extends DefaultTask {
   @Inject
   protected abstract ObjectFactory getObjectFactory()
 
-  @Inject
-  protected abstract ProviderFactory getProviderFactory()
-
   private ArchiveActionFacade instantiateArchiveActionFacade() {
     if (GradleVersion.current() >= GradleVersion.version("6.0")) {
       // Use object factory to instantiate as that will inject the necessary service.
@@ -114,14 +116,17 @@ abstract class ProtobufExtract extends DefaultTask {
     // Provider.map seems broken for excluded tasks. Add inputFiles with all contents excluded for
     // the dependency it provides, but then provide the files we actually care about in our own
     // provider. https://github.com/google/protobuf-gradle-plugin/issues/550
-    PatternSet protoFilter = new PatternSet().include("**/*.proto")
+    // Additionally depend on a dummy task for the own provider so that it is executed at
+    // execution time even with configuration cache enabled.
+    // https://github.com/google/protobuf-gradle-plugin/issues/711
+    FileCollection inputFiles = this.inputFiles
     return objectFactory.fileCollection()
         .from(inputFiles.filter { false })
-        .from(
-          inputFiles.getElements().map { elements ->
+        .from(dummyTaskDependency.elements.map { unused ->
+            Set<File> files = inputFiles.files
+            PatternSet protoFilter = new PatternSet().include("**/*.proto")
             Set<Object> protoInputs = [] as Set
-            for (FileSystemLocation e : elements) {
-              File file = e.asFile
+            for (File file : files) {
               if (file.isDirectory()) {
                 protoInputs.add(file)
               } else if (file.path.endsWith('.proto')) {
@@ -148,7 +153,7 @@ abstract class ProtobufExtract extends DefaultTask {
                       || file.path.endsWith('.tgz')) {
                 protoInputs.add(archiveFacade.tarTree(file.path).matching(protoFilter))
               } else {
-                logger.debug "Skipping unsupported file type (${file.path});" +
+                logger.debug "Skipping unsupported file type (${file.path}); " +
                         "handles only jar, tar, tar.gz, tar.bz2 & tgz"
               }
             }

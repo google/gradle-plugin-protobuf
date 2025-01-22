@@ -77,6 +77,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <exclude name="CyclomaticComplexity"/>
     <exclude name="NestedBlockDepth"/>
     <exclude name="MethodCount"/>
+    <exclude name="ParameterCount"/>
   </ruleset-ref>
   <ruleset-ref path='rulesets/unused.xml'/>
   <ruleset-ref path='rulesets/unnecessary.xml'>

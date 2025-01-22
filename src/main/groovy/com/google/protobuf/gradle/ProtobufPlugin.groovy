@@ -44,6 +44,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.Task
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.LibraryElements
@@ -129,12 +130,13 @@ class ProtobufPlugin implements Plugin<Project> {
         // extract included protos from {@code variant.compileConfiguration}
         // of each variant.
         Collection<Closure> postConfigure = []
+        Provider<Task> dummyTask = project.tasks.register("protobufDummy")
         if (isAndroid) {
           project.android.sourceSets.configureEach { sourceSet ->
             ProtoSourceSet protoSourceSet = protobufExtension.sourceSets.create(sourceSet.name)
             addSourceSetExtension(sourceSet, protoSourceSet)
             Configuration protobufConfig = createProtobufConfiguration(protoSourceSet)
-            setupExtractProtosTask(protoSourceSet, protobufConfig)
+            setupExtractProtosTask(protoSourceSet, protobufConfig, dummyTask)
           }
 
           NamedDomainObjectContainer<ProtoSourceSet> variantSourceSets =
@@ -142,7 +144,7 @@ class ProtobufPlugin implements Plugin<Project> {
               new DefaultProtoSourceSet(name, project.objects)
             }
           ProjectExt.forEachVariant(this.project) { BaseVariant variant ->
-            addTasksForVariant(variant, variantSourceSets, postConfigure)
+            addTasksForVariant(variant, variantSourceSets, postConfigure, dummyTask)
           }
         } else {
           project.sourceSets.configureEach { sourceSet ->
@@ -150,7 +152,7 @@ class ProtobufPlugin implements Plugin<Project> {
             addSourceSetExtension(sourceSet, protoSourceSet)
             Configuration protobufConfig = createProtobufConfiguration(protoSourceSet)
             Configuration compileProtoPath = createCompileProtoPathConfiguration(protoSourceSet)
-            addTasksForSourceSet(sourceSet, protoSourceSet, protobufConfig, compileProtoPath, postConfigure)
+            addTasksForSourceSet(sourceSet, protoSourceSet, protobufConfig, compileProtoPath, postConfigure, dummyTask)
           }
         }
         project.afterEvaluate {
@@ -237,11 +239,11 @@ class ProtobufPlugin implements Plugin<Project> {
      */
     private void addTasksForSourceSet(
         SourceSet sourceSet, ProtoSourceSet protoSourceSet, Configuration protobufConfig,
-        Configuration compileProtoPath, Collection<Closure> postConfigure) {
-      Provider<ProtobufExtract> extractProtosTask = setupExtractProtosTask(protoSourceSet, protobufConfig)
+        Configuration compileProtoPath, Collection<Closure> postConfigure, Provider<Task> dummyTask) {
+      Provider<ProtobufExtract> extractProtosTask = setupExtractProtosTask(protoSourceSet, protobufConfig, dummyTask)
 
       Provider<ProtobufExtract> extractIncludeProtosTask = setupExtractIncludeProtosTask(
-        protoSourceSet, compileProtoPath)
+        protoSourceSet, compileProtoPath, dummyTask)
 
       // Make protos in 'test' sourceSet able to import protos from the 'main' sourceSet.
       // Pass include proto files from main to test.
@@ -295,7 +297,8 @@ class ProtobufPlugin implements Plugin<Project> {
     private void addTasksForVariant(
       Object variant,
       NamedDomainObjectContainer<ProtoSourceSet> variantSourceSets,
-      Collection<Closure> postConfigure
+      Collection<Closure> postConfigure,
+      Provider<Task> dummyTask
     ) {
       Boolean isTestVariant = variant instanceof TestVariant || variant instanceof UnitTestVariant
       ProtoSourceSet variantSourceSet = variantSourceSets.create(variant.name)
@@ -318,7 +321,7 @@ class ProtobufPlugin implements Plugin<Project> {
         }
       }
 
-      setupExtractIncludeProtosTask(variantSourceSet, classPathConfig)
+      setupExtractIncludeProtosTask(variantSourceSet, classPathConfig, dummyTask)
 
       // GenerateProto task, one per variant (compilation unit).
       variant.sourceSets.each { SourceProvider sourceProvider ->
@@ -422,7 +425,8 @@ class ProtobufPlugin implements Plugin<Project> {
      */
     private Provider<ProtobufExtract> setupExtractProtosTask(
       ProtoSourceSet protoSourceSet,
-      Configuration protobufConfig
+      Configuration protobufConfig,
+      Provider<Task> dummyTask
     ) {
       String sourceSetName = protoSourceSet.name
       String taskName = getExtractProtosTaskName(sourceSetName)
@@ -430,6 +434,7 @@ class ProtobufPlugin implements Plugin<Project> {
         it.description = "Extracts proto files/dependencies specified by 'protobuf' configuration"
         it.destDir.set(getExtractedProtosDir(sourceSetName) as File)
         it.inputFiles.from(protobufConfig)
+        it.dummyTaskDependency.from(dummyTask)
       }
       protoSourceSet.proto.srcDir(task)
       return task
@@ -448,13 +453,15 @@ class ProtobufPlugin implements Plugin<Project> {
      */
     private Provider<ProtobufExtract> setupExtractIncludeProtosTask(
         ProtoSourceSet protoSourceSet,
-        FileCollection archives
+        FileCollection archives,
+        Provider<Task> dummyTask
     ) {
       String taskName = 'extractInclude' + Utils.getSourceSetSubstringForTaskNames(protoSourceSet.name) + 'Proto'
       Provider<ProtobufExtract> task = project.tasks.register(taskName, ProtobufExtract) {
         it.description = "Extracts proto files from compile dependencies for includes"
         it.destDir.set(getExtractedIncludeProtosDir(protoSourceSet.name) as File)
         it.inputFiles.from(archives)
+        it.dummyTaskDependency.from(dummyTask)
       }
       protoSourceSet.includeProtoDirs.from(task)
       return task
